@@ -1,0 +1,22 @@
+New in version 0.0.4
+
+	Fixed made Pscan bug
+	Fixed some permissions
+	Kinda fixed Mail problems
+	
+
+New in version 0.0.3
+
+	Added neped source
+	removed test file mailsy as I was getting to many mails
+
+
+New in Version 0.0.2
+
+*	Fixed network Promisc Check
+*	Checks /etc/passwd file
+*	Now checks Tcp Wrappers
+*	Checks failled root logins
+*	General Tidy 
+*	Checks group file
+*	Checks root logins

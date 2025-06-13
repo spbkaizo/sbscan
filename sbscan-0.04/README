@@ -1,0 +1,29 @@
+Welcome to SBSCan, a tool designed to assist system admins who can't be 
+bothered doing anything by hand.  It could also help with some dial-up
+users who need to know bout this kinda thing.
+
+
+
+Currently this tool checks for the following...
+
+ Anonymous FTP
+ Unpassworded accounts
+ Open Ports
+ l33t Open Ports
+ Entire Subnet Promisc Check
+ Local machine promisc check
+ Suspicious Files
+ RHost files
+ Sniffer check - Log files
+ Suid programs in slash home
+ Evidence of a Rootkit
+ X Hosts allowed to connect
+ Permissions on Vital directories.
+ Log file permissions.
+ NFS basic Check
+ And it makes MD5 sums of common files...
+
+Please e-mail comments to sy@haqd.demon.co.uk
+
+
+Visit my rather poor linux site at http://www.haqd.demon.co.uk/linux/

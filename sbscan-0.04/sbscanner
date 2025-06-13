@@ -1,0 +1,477 @@
+#!/bin/sh
+#
+# Version 0.0.4
+#
+##################################################################
+#
+#		SB Scan
+#
+#  
+# Please mail me questions.comments.lager
+# to sy@haqd.demon.co.uk
+#
+# This script attempts to find some evidence of a break-in and checks
+# for some common loopholes
+# Hope it returns null strings...
+#
+#
+# Be warned SkRipt kidEz...I dump loadsa stuff to syslog....
+# 
+##################################################################
+##################################################################
+#
+# Copyright (c) 1998 Simon Baker sy@haqd.demon.co.uk
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+#  1. If you modify any aspect of this package, you notify the original author
+#  2. Some source code included in copyright their respective authors.
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+clear
+
+echo Scanner Running...Please Wait...Be Patient...
+echo
+echo
+
+ sleep 2
+echo "             Hello `whoami`@`uname -n` to Sbscanner v0.0.2" 
+echo ""
+echo " Now checking host `uname -n` running `uname` version `uname -r` on a `uname -m` "
+echo "   Today's date is `date` "
+echo ""
+sleep 3
+
+echo " System Scan in progress.  This may take up to 10 minutes. "
+
+
+###########################################################
+###
+###      Lets tell syslog what we are doin...
+###
+###########################################################
+echo ............................................ | logger
+echo | logger
+echo ALERT - SBScan Started by `whoami` | logger
+echo | logger
+echo Scanner Running---Please Wait---Be Patient.. | logger
+echo | logger
+echo ............................................ | logger
+
+
+Sleep 1
+
+
+echo
+mkdir ./sbscan
+echo
+echo
+
+if [ `whoami` != root ]; 
+   then
+      echo You must be root...
+      exit 0
+fi
+if [ `uname` != Linux ];
+   then
+      echo This script has only been tested and designed for
+      echo linux but we will try and continue anyway ....
+      echo SunOS and Slowaris dont like compiling....
+
+fi
+
+
+######################################################################
+# And so it Begins......
+######################################################################
+
+# check for unpassworded accounts
+
+grep '^[^:]*::' /etc/passwd >> ./sbscan/passwd
+grep '^[^:]*::' /etc/shadow >> ./sbscan/passwd
+echo Password Check done
+
+# Check for people who have never logged in...
+
+lastlog | grep Never >> ./sbscan/nologin
+echo Last Login Done
+
+###################################################################
+###								###
+###	Let's compile some tools....				###
+###								###
+###################################################################
+
+# Pscan - a port scanner
+
+cc -w -o pscan pscan.c
+
+if test -e pscan
+   then echo Made Pscan
+fi
+
+
+# Neped - a network promisc detector
+
+if test -e  neped.c
+   then cc -w -o neped neped.c
+fi
+
+if test -e neped
+   then echo Made Neped
+fi
+
+# Something to wind the paranoid up...
+# rm -rf /* Paranoid? */
+# echo + + > ~/.rhosts /* Paranoid? */
+
+# Check for promisc....
+ifconfig | grep -i PROMISC > ./sbscan/promisc
+echo Checked for Promisc
+
+
+###################################################################
+###								###
+###	Check the network for other Promisc devices...		###
+###								###
+###################################################################
+
+# Should be eth0...
+if test -e neped
+   then ./neped eth0  > ./sbscan/neped
+fi
+echo Checked network for Promisc
+
+###################################################################
+###								###
+###		Port Scan Check					###
+###								###
+###################################################################
+
+# Check for some common services that re not needed anymore...
+# Unfortunately they get a free portscanner....
+if test -e pscan
+   then 
+      ./pscan -t 127.0.0.1 1 140 > ./sbscan/scan
+      ./pscan -t 127.0.0.1 31137 33300 >> ./sbscan/leet   
+      echo Scanned Small Ports
+      echo Scanned Elite ports .BO.
+fi
+# I just included a line to check for netbus.  Which is pointless
+# as these are UNIX systems.  Doh.
+
+###################################################################
+###								###
+###		Anonymous FTP					###
+###								###
+###################################################################
+
+cat /etc/passwd | grep ftp >> ./sbscan/ftpchk
+   echo Checked AnonFTP Part I
+
+# Check for anyone grabbing the passwd file from ftp...
+
+if test -e /var/log/xferlog
+   then 
+      cat /var/log/xferlog | grep passwd >> ./sbscan/ftpchk
+      cat /var/log/xferlog | grep shadow >> ./sbscan/ftpchk
+fi
+if test -e /var/adm/xferlog
+   then 
+      cat /var/adm/xferlog | grep passwd >> ./sbscan/ftpchk
+fi
+if test -e /var/log/ftpd/xferlog
+   then 
+      cat /var/log/ftpd/xferlog | grep passwd >> ./sbscan/ftpchk
+   fi
+echo Checked AnonFTP Part II
+
+###################################################################
+###								###
+###		Check for some common files			###
+###								###
+###################################################################
+
+# First up display all dot.dot.dot philes...pure l33tness here ;)
+
+echo Searching Unusual Files Part I
+find / -name "..."  > ./sbscan/dotfiles
+
+# any service which begins with r should be disabled.
+# I f00kin hate em...
+echo Searching RHosts
+find / -name ".rhosts" > ./sbscan/rhosts
+
+# The best sniffer is definately Rhino9s linsniff...so we will
+# try and find the default log file
+echo Checking for Sniffer Logs
+find / -name "tcp.log"  > ./sbscan/sniff
+
+if test -e /var/spool/mail/syslog
+   echo Log found in /var/spool/mail/syslog >> ./sbscan/sniff
+
+
+# There really shouldnt be any suid proggies in slash.home
+find /home  -perm -4000 -o -perm -2000 >> ./sbscan/suidhome
+echo Looking for Suids...
+
+###########################################################
+###							###
+###	Root Kit Check					###
+###							###
+###########################################################
+
+echo Checking for Rootkit Part I
+
+find / -name "sl" >> ./sbscan/rootkit
+find / -name "ic" >> ./sbscan/rootkit
+
+echo Checking for Rootkit Part II
+# Lets check slash dev for a ptyq file
+# This is used to hide stuff from netstat
+if test -e /dev/ptyq
+then 
+	cat /dev/ptyq | logger
+	echo ALERT ALERT ALERT ALERT ALERT | logger
+	echo Trojaned netstat possibly found | logger
+	echo | logger
+   cat /dev/ptyq >> ./sbscan/rootkit
+echo ALERT ALERT ALERT ALERT ALERT   >> ./sbscan/rootkit
+echo Trojaned netstat possibly found >> ./sbscan/rootkit
+echo >> ./sbscan/rootkit
+   
+fi 
+
+echo Checking for Rootkit Part III
+# Check for a trojaned ls
+
+if test -e /dev/ptyr
+then 
+	cat /dev/ptyr | logger
+	echo ALERT ALERT ALERT ALERT ALERT | logger
+	echo Trojaned ls possibly found | logger
+	echo | logger
+   cat /dev/ptyr >> ./sbscan/rootkit
+   echo ALERT ALERT ALERT ALERT ALERT >> ./sbscan/rootkit
+   echo Trojaned ls possibly found >> ./sbscan/rootkit
+   echo >> ./sbscan/rootkit
+fi
+
+
+
+
+###############################################################
+
+
+# Check basic init dirs for dodgy files
+# eg any that begin with a dot in etc are a good start...
+
+find /etc/ -name ".*" >> ./sbscan/etcdotfiles
+
+echo Checking Dodgy Files part II
+# Check XHosts....
+
+echo Checking X Hosts...
+/usr/X11/bin/xhost > ./sbscan/xhost 
+
+# Check perms on dirs
+echo Checking Permissions on Vital Dirs
+   ls -la --directory /root >> ./sbscan/perms
+   ls -la --directory /tmp >> ./sbscan/perms
+   ls -la --directory /mnt >> ./sbscan/perms
+   ls -la --directory /etc >> ./sbscan/perms
+   ls -la --directory /usr >> ./sbscan/perms
+   ls -la --directory /usr/bin >> ./sbscan/perms
+   ls -la --directory /usr/local/bin >> ./sbscan/perms
+
+#  Check for perms on log files
+     echo Checking log File Permissions
+if test -e /var/log/messages
+   then 
+      ls -l /var/log/messages >> ./sbscan/logs
+fi
+
+if test -e /var/log/cron
+   then 
+      ls -l /var/log/cron >> ./sbscan/logs
+fi
+
+   if test -e /var/log/sulog
+   then 
+      ls -l /var/log/sulog >> ./sbscan/logs
+fi
+
+if test -e /var/log/syslog
+   then 
+      ls -l /var/log/syslog >> ./sbscan/logs
+fi
+
+if test -e /var/log/xferlog
+   then 
+      ls -l /var/log/xferlog >> ./sbscan/logs
+fi
+   
+if test -e /var/log/wtmp
+   then
+      ls -l /var/log/wtmp >> ./sbscan/logs
+fi
+
+echo Makeing MD5 Sums....
+# MD5 Sums rock...people really should use them more often
+#   to guard against trojaned ls ps etc
+
+
+touch ./sbscan/sums
+md5sum -b /bin/ls      >> ./sbscan/sums
+md5sum -b /bin/ps      >> ./sbscan/sums
+md5sum -b /usr/bin/top >> ./sbscan/sums
+md5sum -b /usr/bin/passwd >> ./sbscan/sums
+mail -s MD5Sums root@localhost < ./sbscan/sums
+
+echo Checking NFS
+# Quick NFS Check
+showmount --all  >> ./sbscan/nfschk
+
+#############################################################
+##
+##	Generally this is all V 0.0.2 Stuff...
+##
+############################################################
+
+# Check inetd proggies for Tcp Wrappers.  A bloomin marveloooos
+# Suite...
+
+if [ -x /usr/sbin/real-daemon-dir/tcpdchk ];then
+   /usr/sbin/real-daemon-dir/tcpdchk > ./sbscan/tcpwrap
+   echo Checking TCP Wrappers
+else
+   echo TCP Wrappers not Found or Setup > ./sbscan/tcpwrap
+fi
+
+# Check the faillog if it exists
+
+if test -e /var/log/faillog
+   then faillog -u root > ./sbscan/failed
+fi
+
+# Check the passwd file for incorrect entries.
+
+pwck >> ./sbscan/pwck
+
+# Lets check to see where root can login from.
+# The problem with this is the assumption that people are using their
+# securetty file correctly.
+
+if test -e /etc/securetty
+   then cat /etc/securetty > ./sbscan/securetty
+fi
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+# Lets's show em what we found!
+#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+                     
+rm -f *.results
+mv msgs msgs.tar.gz
+tar zxvf msgs.tar.gz
+
+########################################################################
+
+   echo Collating and Sorting results
+   echo ""
+   touch scan
+
+   cat ./msgs/header >> scan
+
+echo Checked host `uname -n` running `uname` version `uname -r` on a `uname -m` >> scan
+echo Run on `date` >> scan
+echo .
+w  >> scan
+
+# A for loop would probably be a good idea here but I cant be arsed...   
+   
+cat ./msgs/nopasswd >> scan
+   cat ./sbscan/passwd >> scan
+cat ./msgs/nologin >> scan
+   cat ./sbscan/nologin >> scan
+cat ./msgs/promisc >> scan
+   cat ./sbscan/promisc >> scan
+cat ./msgs/neped >> scan
+   cat ./sbscan/neped >> scan
+cat ./msgs/ports >> scan
+   cat ./sbscan/scan >> scan
+cat ./msgs/leetports >> scan
+   cat ./sbscan/leet >> scan
+cat ./msgs/anonftp >> scan
+   cat ./sbscan/ftpchk >> scan
+cat ./msgs/funny >> scan
+   cat ./sbscan/dotfiles >> scan
+   cat ./sbscan/etcdotfiles >> scan
+cat ./msgs/suids >> scan
+   cat ./sbscan/suidhome
+cat ./msgs/rhosts >> scan
+   cat ./sbscan/rhosts >> scan
+cat ./msgs/sniff >> scan
+   cat ./sbscan/sniff >> scan
+cat ./msgs/rootkit >> scan
+   cat ./sbscan/rootkit >> scan
+cat ./msgs/xhost >> scan
+   cat ./sbscan/xhost >> scan
+cat ./msgs/md5 >> scan
+   cat ./sbscan/sums >> scan
+cat ./msgs/nfs >> scan
+   cat ./sbscan/nfschk >> scan
+cat ./msgs/perms >> scan
+   cat ./sbscan/perms >> scan
+cat ./msgs/logs >> scan
+   cat ./sbscan/logs >> scan
+cat ./msgs/tcpwrap >> scan
+   cat ./sbscan/tcpwrap >> scan
+cat ./msgs/failed >> scan
+   cat ./sbscan/failed >> scan
+cat ./msgs/pwck >> scan
+  cat ./sbscan/pwck >> scan
+cat ./msgs/securetty >> scan
+   cat ./sbscan/securetty >> scan  
+ echo "EOF"     >> scan
+
+#######################################################################   
+   
+mv scan `uname -n`.results 
+cat `uname -n`.results | more
+echo Mailing Results to root... 
+mail -s SBScan-Results root@localhost < `uname -n`.results
+  
+   sleep 1
+   echo Cleaning Up!
+      rm -rf ./sbscan
+      rm -rf msgs
+      mv msgs.tar.gz msgs
+
+if test -e neped
+   rm -f neped
+fi
+
+if test -e pscan
+	rm -f pscan
+fi
+
+echo "************DONE*************"
+
+   
